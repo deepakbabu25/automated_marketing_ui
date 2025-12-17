@@ -12,11 +12,13 @@ import {
 
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import FlashOnIcon from "@mui/icons-material/FlashOn";
+import { Navigate, useParams } from "react-router-dom";
+import { api } from "../../services/api";
 
 export default function Chatbot() {
-  /* -----------------------------
-     STATE
-  ----------------------------- */
+  const { id } = useParams(); // product_id from URL
+  const PRODUCT_ID = id;
+
   const [messages, setMessages] = useState([
     {
       role: "bot",
@@ -24,9 +26,8 @@ export default function Chatbot() {
     },
   ]);
 
-  const [draft, setDraft] = useState("");          // text user types
-  const [finalMessage, setFinalMessage] = useState(""); // approved message
-
+  const [draft, setDraft] = useState("");
+  const [finalMessage, setFinalMessage] = useState("");
   const chatEndRef = useRef(null);
 
   /* -----------------------------
@@ -37,95 +38,76 @@ export default function Chatbot() {
   }, [messages]);
 
   /* =====================================================
-     MOCK AI REWRITE FUNCTION
-     (Replace this when connecting to backend AI)
-     ===================================================== */
-  const mockAIRewrite = async (text) => {
-    // ⛔ REMOVE THIS FUNCTION WHEN BACKEND IS READY
-
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve(`✨ Optimized version: ${text}`);
-      }, 700);
-    });
-  };
-
-  /* =====================================================
-     OPTIMIZE BUTTON (⬆️)
-     - Calls AI rewrite
-     - Updates chat
-     - Stores finalMessage
-     ===================================================== */
+     STREAMING AI CALL (REAL BACKEND)
+  ===================================================== */
   const handleOptimize = async () => {
     if (!draft.trim()) return;
 
-    // show user message immediately
+    // Add user message
     setMessages((prev) => [...prev, { role: "user", text: draft }]);
-
-    /* ---------------------------------------------------
-       🔌 BACKEND INTEGRATION POINT #1 (AI REWRITE)
-       ---------------------------------------------------
-       Replace mockAIRewrite with API call like:
-
-       const res = await fetch("/api/ai/rewrite/", {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-           product_id: PRODUCT_ID,
-           input_text: draft
-         })
-       });
-       const data = await res.json();
-       const optimizedText = data.optimized_text;
-    --------------------------------------------------- */
-
-    const optimizedText = await mockAIRewrite(draft);
-
-    // show AI response
-    setMessages((prev) => [
-      ...prev,
-      { role: "bot", text: optimizedText },
-    ]);
-
-    // store as final message
-    setFinalMessage(optimizedText);
     setDraft("");
+
+    // Placeholder bot message (will stream into this)
+    setMessages((prev) => [...prev, { role: "bot", text: "" }]);
+
+    const response = await fetch(
+      "http://localhost:8000/api/writer_chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("user_token")}`,
+        },
+        body: JSON.stringify({
+          product_id: PRODUCT_ID,
+          text: draft,
+        }),
+      }
+    );
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    let fullText = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+
+      const lines = chunk.split("\n");
+      for (let line of lines) {
+        if (line.startsWith("data: ")) {
+          const token = line.replace("data: ", "");
+          fullText += token;
+
+          // Update last bot message
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = {
+              role: "bot",
+              text: fullText,
+            };
+            return updated;
+          });
+        }
+      }
+    }
+
+    setFinalMessage(fullText);
   };
 
   /* =====================================================
-     SEND FINAL MESSAGE BUTTON
-     - Sends approved message to backend
-     ===================================================== */
-  const handleSendFinal = async () => {
-    if (!finalMessage.trim()) return;
-
-    /* ---------------------------------------------------
-       🔌 BACKEND INTEGRATION POINT #2 (SEND MARKETING)
-       ---------------------------------------------------
-       Replace console.log with real API:
-
-       await fetch("/api/marketing/send/", {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-           product_id: PRODUCT_ID,
-           message: finalMessage
-         })
-       });
-    --------------------------------------------------- */
-
-    console.log("FINAL MESSAGE SENT TO API:", finalMessage);
-
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", text: finalMessage },
-      {
-        role: "bot",
-        text: "✅ Final message sent successfully for marketing.",
-      },
-    ]);
-
-    setFinalMessage("");
+     FINAL SEND (OPTIONAL)
+     Backend already saves automatically
+  ===================================================== */
+  const handleSendFinal =async() => {
+    const response=await api.sendFinalMessage({product_id:PRODUCT_ID})
+    console.log(response);
+    if (response.data.status === "success") {
+      navigate("/dashboard"); // ✅ SAFE
+    }
   };
 
   return (
@@ -148,21 +130,15 @@ export default function Chatbot() {
           borderBottom: "1px solid rgba(255,255,255,0.06)",
         }}
       >
-        <Box
-          sx={{
-            background: "#00e5ff",
-            p: 1,
-            borderRadius: "12px",
-          }}
-        >
+        <Box sx={{ background: "#00e5ff", p: 1, borderRadius: "12px" }}>
           <FlashOnIcon sx={{ color: "black" }} />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: "bold" }}>
+        <Typography variant="h6" fontWeight="bold">
           AutoMarket Chatbot
         </Typography>
       </Box>
 
-      {/* CHAT AREA */}
+      {/* CHAT */}
       <Container sx={{ flex: 1, overflowY: "auto", py: 3 }}>
         <Stack spacing={2}>
           {messages.map((msg, i) => (
@@ -184,9 +160,7 @@ export default function Chatbot() {
                   color: msg.role === "user" ? "black" : "#fff",
                 }}
               >
-                <Typography sx={{ fontSize: "0.95rem" }}>
-                  {msg.text}
-                </Typography>
+                <Typography>{msg.text}</Typography>
               </Paper>
             </Box>
           ))}
@@ -194,18 +168,11 @@ export default function Chatbot() {
         </Stack>
       </Container>
 
-      {/* INPUT AREA */}
-      <Box
-        sx={{
-          p: 2,
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          background: "rgba(10,15,36,0.95)",
-        }}
-      >
-        {/* OPTIMIZE INPUT */}
+      {/* INPUT */}
+      <Box sx={{ p: 2, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
         <TextField
           fullWidth
-          placeholder="Type message to rewrite / optimize..."
+          placeholder="Type message to optimize..."
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           sx={{
@@ -223,7 +190,6 @@ export default function Chatbot() {
                   background: "#00e5ff",
                   color: "black",
                   ml: 1,
-                  "&:hover": { background: "#19f3ff" },
                 }}
               >
                 <ArrowUpwardIcon />
@@ -232,7 +198,6 @@ export default function Chatbot() {
           }}
         />
 
-        {/* SEND FINAL MESSAGE */}
         <Button
           fullWidth
           disabled={!finalMessage}

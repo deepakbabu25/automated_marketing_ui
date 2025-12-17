@@ -70,7 +70,22 @@ export const api = {
         return response.data;
     },
     deleteProduct: async (id) => {
-        const response = await privateApiClient.delete(`/products/${id}/`);
+        const response = await privateApiClient.delete(`/products/${id}/delete/`);
         return response.data;
     },
+    getOrganisationDetails: async (id) => {
+        const response = await privateApiClient.get(`/organisations/${id}/`);
+        return response.data;
+    },
+    addProduct: async(data) =>{
+        const response=await privateApiClient.post('/products/create/',data);
+        return response.data
+
+    },
+    sendFinalMessage: async(payload)=>{
+        const response = await privateApiClient.post('/batch_message',payload)
+        return response.data;
+    }
+
+    
 }

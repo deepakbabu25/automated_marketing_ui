@@ -18,9 +18,12 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
+import { useAppDispatch } from "../../store/hooks";
+import { setOrgData } from "../../store/slices/organisationSlice";
 
 export default function Login() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
   /* -------------------- STATES -------------------- */
   const [businessEmail, setBusinessEmail] = useState("");
@@ -78,6 +81,8 @@ export default function Login() {
       };
 
       const response = await api.login(payload);
+      const data = response.data ?? response;
+      console.log("LOGIN RESPONSE:", data);
 
       const token =
         response?.token ||
@@ -88,6 +93,7 @@ export default function Login() {
 
       if (token) {
         localStorage.setItem("user_token", token);
+        dispatch(setOrgData(response.organisation))
         setSuccessMsg("Login successful");
         setTimeout(() => navigate("/dashboard"), 1000);
       } else {
@@ -99,7 +105,12 @@ export default function Login() {
         setErrorMsg(serverMsg);
       }
     } catch (err) {
-      setErrorMsg("Something went wrong. Please try again.");
+      console.error("Login error:", err);
+      const errorMessage = err?.response?.data?.message || 
+                          err?.response?.data?.detail ||
+                          err?.message ||
+                          "Something went wrong. Please try again.";
+      setErrorMsg(errorMessage);
     }
   };
 

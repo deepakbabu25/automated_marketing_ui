@@ -19,6 +19,8 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
+import { useAppSelector } from "../../store/hooks";
+import { selectOrgData } from "../../store/slices/organisationSlice";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -347,17 +349,37 @@ export default function Register() {
             component="label"
             fullWidth
             sx={{
-              mb: 3,
+              mb: 1,
               borderRadius: "12px",
               borderColor: "#00e5ff",
               color: "#00e5ff",
               textTransform: "none",
             }}
           >
-            Upload Portfolio (PDF)
-            <input type="file" accept="application/pdf" hidden
-            onChange={(e) =>{console.log("Event--", e.target.files); setUploadedPdf(e.target.files[0])}} />
+            {uploadedPdf ? "Change Portfolio (PDF)" : "Upload Portfolio (PDF)"}
+            <input
+              type="file"
+              accept="application/pdf"
+              hidden
+              onChange={(e) => {
+                const file = e.target.files && e.target.files[0];
+                setUploadedPdf(file || null);
+              }}
+            />
           </Button>
+
+          {/* Selected file info */}
+          <Typography
+            variant="body2"
+            sx={{
+              mb: 3,
+              color: uploadedPdf ? "#00e5ff" : "#bbb",
+            }}
+          >
+            {uploadedPdf
+              ? `Selected file: ${uploadedPdf.name}`
+              : "No PDF selected yet"}
+          </Typography>
 
           {/* REGISTER BUTTON */}
           <Button

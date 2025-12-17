@@ -82,17 +82,69 @@ export default function ProductDetails() {
     );
   }
 
-  // separate main fields from extra meta so we can show "every detail"
-  const mainKeys = [
+  // Get organisation name (handle both object and ID cases)
+  const getOrganisationName = () => {
+    if (!product.organisation) return "N/A";
+    
+    // If organisation is an object, try to get the name
+    if (typeof product.organisation === "object") {
+      return product.organisation.name || 
+             product.organisation.org_name || 
+             product.organisation.organisation_name ||
+             JSON.stringify(product.organisation);
+    }
+    
+    // If it's just an ID, return it (API should ideally return organisation name)
+    return product.organisation;
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  // Format field value based on its type
+  const formatFieldValue = (key, value) => {
+    if (value === null || value === "") return null;
+    
+    if (key.includes("date") || key === "created_at" || key === "updated_at") {
+      return formatDate(value);
+    }
+    
+    if (typeof value === "object") {
+      return JSON.stringify(value, null, 2);
+    }
+    
+    return String(value);
+  };
+
+  // Get all product fields that aren't already displayed prominently
+  const displayedFields = [
     "product_name",
     "product_description",
     "price",
     "product_category",
     "location",
+    "marketing_message",
+    "organisation",
+    "high_intent_leads_count",
   ];
 
-  const detailEntries = Object.entries(product).filter(
-    ([key, value]) => !mainKeys.includes(key) && value !== null && value !== ""
+  // Get all other fields
+  const allOtherFields = Object.entries(product).filter(
+    ([key]) => !displayedFields.includes(key)
   );
 
   return (
@@ -100,7 +152,7 @@ export default function ProductDetails() {
       sx={{
         minHeight: "100vh",
         background: "linear-gradient(to bottom, #0A0F24, #051018)",
-        color: "#fff",
+        color: "#ffff",
         pb: 6,
       }}
     >
@@ -117,13 +169,53 @@ export default function ProductDetails() {
         >
           <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={2}>
             <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              <Typography variant="h4" sx={{ fontWeight: 800, color: "#fff" }}>
                 {product.product_name}
               </Typography>
 
               <Typography sx={{ mt: 2, color: "#bbb" }}>
                 {product.product_description}
               </Typography>
+
+              {/* Marketing Message */}
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" sx={{ color: "#7aa0b5", mb: 0.5 }}>
+                  Marketing Message
+                </Typography>
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: product.marketing_message ? "#fff" : "#888",
+                    fontStyle: product.marketing_message ? "normal" : "italic",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {product.marketing_message || "No marketing message available"}
+                </Box>
+              </Box>
+
+              {/* Organisation Name */}
+              {product.organisation && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: "#7aa0b5", mb: 0.5 }}>
+                    Organisation
+                  </Typography>
+                  <Typography sx={{ color: "#fff", fontSize: "0.9rem" }}>
+                    {getOrganisationName()}
+                  </Typography>
+                </Box>
+              )}
+             <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2" sx={{ color: "#7aa0b5", mb: 0.5 }}>
+                    HighIntentLeads
+                  </Typography>
+                  <Typography sx={{ color: "#fff", fontSize: "0.9rem" }}>
+                    {product.high_intent_leads_count||"No Matchingn leads for right now"}
+                  </Typography>
+                </Box>
 
               <Stack direction="row" spacing={2} sx={{ mt: 3, flexWrap: "wrap" }}>
                 <Chip
@@ -152,7 +244,54 @@ export default function ProductDetails() {
                     }}
                   />
                 )}
+                {product.discount && (
+                  <Chip
+                    label={`${product.discount}% OFF`}
+                    sx={{
+                      borderRadius: "999px",
+                      border: "1px solid #b388ff",
+                      color: "#b388ff",
+                    }}
+                  />
+                )}
               </Stack>
+
+              {/* All Other Product Details */}
+              {allOtherFields.length > 0 && (
+                <Box sx={{ mt: 3, pt: 3, borderTop: "1px solid rgba(255,255,255,0.1)" }}>
+                  <Typography variant="body2" sx={{ color: "#7aa0b5", mb: 2, fontWeight: 600, fontSize: "0.95rem" }}>
+                    Additional Details
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    {allOtherFields.map(([key, value]) => {
+                      const formattedValue = formatFieldValue(key, value);
+                      if (formattedValue === null) return null;
+                      
+                      const formattedKey = key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                      
+                      return (
+                        <Stack key={key} direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ gap: 2 }}>
+                          <Typography variant="body2" sx={{ color: "#7aa0b5", minWidth: "140px" }}>
+                            {formattedKey}:
+                          </Typography>
+                          <Typography 
+                            variant="body2" 
+                            sx={{ 
+                              color: "#fff", 
+                              textAlign: "right", 
+                              flex: 1,
+                              wordBreak: "break-word",
+                              whiteSpace: "pre-wrap"
+                            }}
+                          >
+                            {formattedValue}
+                          </Typography>
+                        </Stack>
+                      );
+                    })}
+                  </Stack>
+                </Box>
+              )}
             </Box>
 
             {/* Actions */}
@@ -184,42 +323,6 @@ export default function ProductDetails() {
             </Stack>
           </Stack>
         </Paper>
-
-        {/* All raw product details */}
-        {detailEntries.length > 0 && (
-          <Paper
-            sx={{
-              p: 3,
-              borderRadius: 3,
-              background: "rgba(5,16,24,0.9)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-              All Product Details
-            </Typography>
-
-            <Divider sx={{ borderColor: "rgba(255,255,255,0.08)", mb: 2 }} />
-
-            <Stack spacing={1.5}>
-              {detailEntries.map(([key, value]) => (
-                <Stack
-                  key={key}
-                  direction="row"
-                  justifyContent="space-between"
-                  sx={{ gap: 2 }}
-                >
-                  <Typography sx={{ color: "#7aa0b5", textTransform: "capitalize" }}>
-                    {key.replace(/_/g, " ")}
-                  </Typography>
-                  <Typography sx={{ color: "#fff", wordBreak: "break-word" }}>
-                    {typeof value === "object" ? JSON.stringify(value, null, 2) : String(value)}
-                  </Typography>
-                </Stack>
-              ))}
-            </Stack>
-          </Paper>
-        )}
       </Container>
 
       {/* SUCCESS POPUP */}

@@ -26,6 +26,9 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 
 import { useNavigate } from "react-router-dom";
 import { api } from "../../services/api";
+import { useAppSelector } from "../../store/hooks";
+import { selectOrgData } from "../../store/slices/organisationSlice";
+
 
 const PAGE_SIZE = 10;
 
@@ -33,19 +36,19 @@ const PAGE_SIZE = 10;
 /* -------------------------------
    CHECK IF PRODUCT IS LOCKED
 --------------------------------*/
-function getMarketingLockInfo(marketed_at) {
-  if (!marketed_at) return { locked: false, daysLeft: 0 };
+function getMarketingLockInfo(marketingDate) {
+  if (!marketingDate) return { locked: false, daysLeft: 0 };
 
-  const marketedDate = new Date(marketed_at);
+  const marketedDate = new Date(marketingDate);
   const now = new Date();
 
   const diffMs = now - marketedDate;
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
 
-  if (diffDays < 30) {
+  if (diffDays < 10) {
     return {
       locked: true,
-      daysLeft: Math.ceil(30 - diffDays),
+      daysLeft: Math.ceil(10 - diffDays),
     };
   }
   return { locked: false, daysLeft: 0 };
@@ -99,6 +102,22 @@ export default function Dashboard() {
   const sentinelRef = useRef(null);
   const [productList, setProductList]= useState([]);
   const [isProductListLoading, setIsProductListLoading] = useState(true);
+  const org = useAppSelector(selectOrgData);
+
+  // Get organisation name from Redux data
+  // const getOrganisationName = () => {
+  //   if (!org) return "Your Products";
+    
+  //   // Try different possible field names for organisation name
+  //   const orgName = org.org_name || 
+  //                  org.name || 
+  //                  org.organisation_name ||
+  //                  (typeof org === "string" ? org : null);
+    
+  //   return orgName || "Your Products";
+  // };
+
+  console.log("Org Data---", org)
 
   const getProductsByPageSize = (page, size) => {
     console.log("List------", productList.length, page, size, page*size, productList.length > (page*size))
@@ -178,9 +197,9 @@ export default function Dashboard() {
   const handleDetails = (p) => {
     console.log(p.id);
     navigate(`/products/${p.product_id}`)};
-  const handleChatbot = (p) => navigate(`/products/${p.product_id}/marketing`);
+  const handleChatbot = (p) => navigate(`/products/${p.product_id}/chatbot`);
   const handleAnalysis = (p) => navigate(`/products/${p.product_id}/analysis`);
-  const handleAddProduct = () => navigate("/products/new");
+  const handleAddProduct = () => navigate("/addproduct");
 
   const [navValue, setNavValue] = useState("products");
 
@@ -221,7 +240,7 @@ export default function Dashboard() {
 
       <Container maxWidth="lg" sx={{ pt: 6 }}>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 2 }}>
-          Your Products
+          {org?org.org_name:'Your Products'}
         </Typography>
 
         <Typography sx={{ color: "#bbb", mb: 3 }}>
@@ -257,7 +276,7 @@ export default function Dashboard() {
           <List>
             {products.map((p) => {
               const { locked, daysLeft } = getMarketingLockInfo(
-                p.created_at
+                p.marketing_date
               );
 
               return (
@@ -293,18 +312,20 @@ export default function Dashboard() {
                       <Stack direction="row" spacing={1}>
                         {/* MARKET & CHAT */}
                         <Button
-                          variant="contained"
+                          variant="text"
                           disabled={locked}
                           startIcon={<ChatBubbleOutlineIcon />}
                           onClick={() => !locked && handleChatbot(p)}
                           sx={{
                             borderRadius: "10px",
-                            background: locked
-                              ? "rgba(255,255,255,0.15)"
-                              : "linear-gradient(to right,#00e5ff,#7a6cff)",
-                            color: locked ? "#777" : "black",
+                            color: "#00e5ff",
                             cursor: locked ? "not-allowed" : "pointer",
                             textTransform: "none",
+                            "&.Mui-disabled": {
+                              color: "#6b6b6b",          // disabled text color
+                              opacity: 0.6,
+                              cursor: "not-allowed",
+                            },
                           }}
                         >
                           {locked
@@ -313,7 +334,7 @@ export default function Dashboard() {
                         </Button>
 
                         {/* ANALYSIS BUTTON */}
-                        {p.created_at && (
+                        {p.marketing_date && (
                           <Button
                             variant="text"
                             startIcon={<AnalyticsOutlinedIcon />}
