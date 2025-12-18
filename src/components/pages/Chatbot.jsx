@@ -14,9 +14,13 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import FlashOnIcon from "@mui/icons-material/FlashOn";
 import { Navigate, useParams } from "react-router-dom";
 import { api } from "../../services/api";
+import ReactMarkdown from "react-markdown";
+import { useNavigate } from "react-router-dom";
+
 
 export default function Chatbot() {
   const { id } = useParams(); // product_id from URL
+  const navigate = useNavigate();
   const PRODUCT_ID = id;
 
   const [messages, setMessages] = useState([
@@ -50,62 +54,86 @@ export default function Chatbot() {
     // Placeholder bot message (will stream into this)
     setMessages((prev) => [...prev, { role: "bot", text: "" }]);
 
-    const response = await fetch(
-      "http://localhost:8000/api/writer_chat",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("user_token")}`,
-        },
-        body: JSON.stringify({
-          product_id: PRODUCT_ID,
-          text: draft,
-        }),
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/writer_chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("user_token")}`,
+          },
+          body: JSON.stringify({
+            product_id: PRODUCT_ID,
+            text: draft,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
 
-    let fullText = "";
+      let fullText = "";
+      let buffer = "";
 
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-      const chunk = decoder.decode(value, { stream: true });
+        // Decode the chunk and add to buffer
+        buffer += decoder.decode(value, { stream: true });
 
-      const lines = chunk.split("\n");
-      for (let line of lines) {
-        if (line.startsWith("data: ")) {
-          const token = line.replace("data: ", "");
-          fullText += token;
+        // Split by SSE message delimiter (double newline)
+        const messages = buffer.split("\n\n");
 
-          // Update last bot message
-          setMessages((prev) => {
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              role: "bot",
-              text: fullText,
-            };
-            return updated;
-          });
+        // Keep the last incomplete message in the buffer
+        buffer = messages.pop() || "";
+
+        // Process complete messages
+        for (let message of messages) {
+          if (message.startsWith("data: ")) {
+            const token = message.substring(6); // Remove "data: " prefix
+            fullText += token;
+
+            // Update last bot message
+            setMessages((prev) => {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                role: "bot",
+                text: fullText,
+              };
+              return updated;
+            });
+          }
         }
       }
-    }
 
-    setFinalMessage(fullText);
+      setFinalMessage(fullText);
+    } catch (error) {
+      console.error("Streaming error:", error);
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          role: "bot",
+          text: "Sorry, there was an error processing your request. Please try again.",
+        };
+        return updated;
+      });
+    }
   };
 
   /* =====================================================
      FINAL SEND (OPTIONAL)
      Backend already saves automatically
   ===================================================== */
-  const handleSendFinal =async() => {
-    const response=await api.sendFinalMessage({product_id:PRODUCT_ID})
+  const handleSendFinal = async () => {
+    const response = await api.sendFinalMessage({ product_id: PRODUCT_ID })
     console.log(response);
-    if (response.data.status === "success") {
+    if (response.status === "success") {
       navigate("/dashboard"); // ✅ SAFE
     }
   };
@@ -160,7 +188,18 @@ export default function Chatbot() {
                   color: msg.role === "user" ? "black" : "#fff",
                 }}
               >
-                <Typography>{msg.text}</Typography>
+                {/* <Typography>{msg.text}</Typography> */}
+                <ReactMarkdown
+                  components={{
+                    p: ({ children }) => (
+                      <Typography sx={{ whiteSpace: "pre-line" }}>
+                        {children}
+                      </Typography>
+                    ),
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
               </Paper>
             </Box>
           ))}
